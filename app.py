@@ -1,12 +1,10 @@
 import numpy as np
-import re
-import datetime as dt
 
 import sqlalchemy
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, func
-from sqlalchemy.sql import exists  
+import datetime as dt
 
 from flask import Flask, jsonify
 
@@ -19,7 +17,7 @@ engine = create_engine("sqlite:///Resources/hawaii.sqlite")
 # reflect an existing database into a new model
 Base = automap_base()
 # reflect the tables
-Base.prepare(engine, reflect=True)
+Base.prepare(autoload_with=engine)
 
 # Save reference to the tables
 Measurement = Base.classes.measurement
@@ -42,6 +40,7 @@ def welcome():
         f"Available Routes:<br/>"
         f"/api/v1.0/precipitation<br/>"
         f"/api/v1.0/stations<br/>"
+        f"/api/v1.0/tobs<br/>"
     )
 
 
@@ -78,7 +77,23 @@ def stations():
 
     return jsonify(station_details)
 
+@app.route('/api/v1.0/tobs')
+def tobs():
+    session = Session(engine)
 
+    year_ago_date= dt.date(2017, 8, 23) - dt.timedelta(days=366)
+    mas = session.query(Measurement.station).group_by(Measurement.station).order_by(func.count(Measurement.station).desc()).first()[0]
+
+    return { date:tmp for date,tmp in session.query(Measurement.date,Measurement.tobs).filter((Measurement.station==mas) & (Measurement.date >= year_ago_date))}
+
+@app.route('/api/v1.0/<startDate>')
+@app.route('/api/v1.0/<startDate>/<endDate>')
+def dateRange(startDate, endDate = '2017-08-23'):
+
+    session = Session(engine)
+    result = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).first()
+
+    return {'min':result[0],'avg':result[1],'max':result[2]}
 
 if __name__ == '__main__':
     app.run(debug=True)
